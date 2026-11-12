@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 class Evaluator:
     """SQL 生成评估器"""
 
+    MISMATCH_LABELS = {
+        "column_count_mismatch": "结果列数不同",
+        "row_count_mismatch": "结果行数不同",
+        "column_name_mismatch": "结果列标签不同",
+        "row_order_mismatch": "结果行顺序不同",
+        "row_values_mismatch": "结果行内容不同",
+    }
+
     def __init__(self, db_client: Optional[DatabaseClient] = None):
         """
         Args:
@@ -70,7 +78,7 @@ class Evaluator:
             "exact_match": False,
             "execution_match": False,
             "error": None,
-            "detail": {}
+            "detail": {"mismatch_reason": None}
         }
 
         # 1. 生成 SQL
@@ -96,16 +104,18 @@ class Evaluator:
             result["error"] = f"生成 SQL 执行失败：{e}"
             result["detail"] = {
                 "expected_columns": exp_columns,
-                "expected_row_count": len(exp_results)
+                "expected_row_count": len(exp_results),
+                "mismatch_reason": None,
             }
             return result
 
         # 4. 对比执行结果
-        result["execution_match"] = self._results_equivalent(
+        mismatch_reason = self._result_mismatch_reason(
             gen_columns, gen_results, generated_sql,
             exp_columns, exp_results, expected_sql,
             order_sensitive=order_sensitive,
         )
+        result["execution_match"] = mismatch_reason is None
 
         result["detail"] = {
             "expected_columns": exp_columns,
@@ -113,6 +123,7 @@ class Evaluator:
             "generated_columns": gen_columns,
             "generated_row_count": len(gen_results),
             "order_sensitive": order_sensitive,
+            "mismatch_reason": mismatch_reason,
         }
 
         return result
@@ -184,6 +195,9 @@ class Evaluator:
                 if not r["execution_match"]:
                     lines.append(f"  预期行数：{r['detail'].get('expected_row_count', 'N/A')}, "
                                f"生成行数：{r['detail'].get('generated_row_count', 'N/A')}")
+                    reason = r["detail"].get("mismatch_reason")
+                    if reason:
+                        lines.append(f"  结果差异：{self.MISMATCH_LABELS.get(reason, reason)} ({reason})")
 
         return "\n".join(lines)
 
@@ -201,8 +215,24 @@ class Evaluator:
         exp_sql: str,
         order_sensitive: bool = False,
     ) -> bool:
-        """
-        判定两组执行结果是否等价
+        """兼容原有接口：判断两组执行结果是否等价。"""
+        return self._result_mismatch_reason(
+            gen_columns, gen_results, gen_sql,
+            exp_columns, exp_results, exp_sql,
+            order_sensitive=order_sensitive,
+        ) is None
+
+    def _result_mismatch_reason(
+        self,
+        gen_columns: list,
+        gen_results: list,
+        gen_sql: str,
+        exp_columns: list,
+        exp_results: list,
+        exp_sql: str,
+        order_sensitive: bool = False,
+    ) -> str | None:
+        """返回当前结果中的首个差异类型；匹配时返回 None。
 
         比较策略：
         1. 列数必须相同
@@ -214,17 +244,17 @@ class Evaluator:
         5. 保留重复列名，并区分 SQL NULL 和字符串
         """
         if len(gen_columns) != len(exp_columns):
-            return False
+            return "column_count_mismatch"
 
         if len(gen_results) != len(exp_results):
-            return False
+            return "row_count_mismatch"
 
         check_columns = (
             self._should_check_column_names(exp_sql) or
             self._should_check_column_names(gen_sql)
         )
         if check_columns and sorted(gen_columns) != sorted(exp_columns):
-            return False
+            return "column_name_mismatch"
 
         def normalize_rows(columns, rows, use_column_names: bool = True):
             def normalize_value(value):
@@ -238,12 +268,16 @@ class Evaluator:
                 ]
             else:
                 normalized = [tuple(normalize_value(val) for val in row) for row in rows]
-            return normalized if order_sensitive else sorted(normalized)
+            return normalized
 
         gen_normalized = normalize_rows(gen_columns, gen_results, check_columns)
         exp_normalized = normalize_rows(exp_columns, exp_results, check_columns)
 
-        return gen_normalized == exp_normalized
+        if gen_normalized == exp_normalized:
+            return None
+        if sorted(gen_normalized) != sorted(exp_normalized):
+            return "row_values_mismatch"
+        return "row_order_mismatch" if order_sensitive else None
 
     def _should_check_column_names(self, sql: str) -> bool:
         """

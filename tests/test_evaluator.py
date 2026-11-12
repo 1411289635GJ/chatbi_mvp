@@ -71,6 +71,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(result["detail"]["expected_row_count"], 2)
         self.assertEqual(result["detail"]["generated_row_count"], 2)
         self.assertFalse(result["execution_match"])
+        self.assertEqual(result["detail"]["mismatch_reason"], "row_order_mismatch")
 
     def test_non_boolean_order_sensitive_is_rejected(self):
         expected_sql = "SELECT name FROM customers"
@@ -125,6 +126,81 @@ class EvaluatorTests(unittest.TestCase):
     def test_empty_evaluation_report_does_not_divide_by_zero(self):
         report = Evaluator(db_client=FakeDatabase({})).generate_report([])
         self.assertIn("总用例数：0", report)
+
+
+    def test_mismatch_reasons_distinguish_columns_and_rows(self):
+        expected_sql = "SELECT name FROM customers"
+        generated_sql = "SELECT name FROM customers WHERE id > 0"
+        cases = [
+            ((["name"], [("Alice",)]), (["name", "id"], [("Alice", 1)]),
+             "column_count_mismatch"),
+            ((["name"], [("Alice",)]), (["name"], [("Alice",), ("Bob",)]),
+             "row_count_mismatch"),
+            ((["name"], []), (["id"], []), "column_name_mismatch"),
+            ((["name"], [("Alice",)]), (["name"], [("Bob",)]), "row_values_mismatch"),
+        ]
+        for expected_result, generated_result, reason in cases:
+            with self.subTest(reason=reason):
+                result = evaluate_results(expected_sql, expected_result, generated_sql, generated_result)
+                self.assertIsNone(result["error"])
+                self.assertFalse(result["execution_match"])
+                self.assertEqual(result["detail"]["mismatch_reason"], reason)
+
+    def test_order_reason_only_when_values_match_without_order(self):
+        expected_sql = "SELECT name FROM customers ORDER BY id ASC"
+        generated_sql = "SELECT name FROM customers ORDER BY id DESC"
+        expected = (["name"], [("Alice",), ("Bob",)])
+        reversed_rows = (["name"], [("Bob",), ("Alice",)])
+        changed_rows = (["name"], [("Bob",), ("Charlie",)])
+
+        ordered = evaluate_results(expected_sql, expected, generated_sql, reversed_rows, order_sensitive=True)
+        self.assertEqual(ordered["detail"]["mismatch_reason"], "row_order_mismatch")
+
+        unordered = evaluate_results(expected_sql, expected, generated_sql, reversed_rows)
+        self.assertTrue(unordered["execution_match"])
+        self.assertIsNone(unordered["detail"].get("mismatch_reason"))
+
+        changed = evaluate_results(expected_sql, expected, generated_sql, changed_rows, order_sensitive=True)
+        self.assertEqual(changed["detail"]["mismatch_reason"], "row_values_mismatch")
+
+    def test_execution_errors_are_not_diagnosed_as_result_mismatches(self):
+        expected_sql = "SELECT name FROM customers"
+        generated_sql = "SELECT name FROM customers WHERE id > 0"
+        case = {"question": "查询客户", "expected_sql": expected_sql}
+        result = Evaluator(db_client=FakeDatabase({})).evaluate_one(
+            case, lambda _: (_ for _ in ()).throw(RuntimeError("generation failed"))
+        )
+        self.assertIsNotNone(result["error"])
+        self.assertIsNone(result["detail"].get("mismatch_reason"))
+
+        for db_results in ({}, {expected_sql: (["name"], [("Alice",)])}):
+            with self.subTest(db_results=bool(db_results)):
+                result = Evaluator(db_client=FakeDatabase(db_results)).evaluate_one(case, lambda _: generated_sql)
+                self.assertIsNotNone(result["error"])
+                self.assertIsNone(result["detail"].get("mismatch_reason"))
+
+    def test_report_includes_reason_without_result_values(self):
+        expected_sql = "SELECT name FROM customers ORDER BY id ASC"
+        generated_sql = "SELECT name FROM customers ORDER BY id DESC"
+        result = evaluate_results(
+            expected_sql, (["name"], [("PRIVATE_A",), ("PRIVATE_B",)]),
+            generated_sql, (["name"], [("PRIVATE_B",), ("PRIVATE_A",)]),
+            order_sensitive=True,
+        )
+        report = Evaluator(db_client=FakeDatabase({})).generate_report([result])
+        self.assertIn("row_order_mismatch", report)
+        self.assertNotIn("PRIVATE_A", report)
+        self.assertNotIn("PRIVATE_B", report)
+
+    def test_report_accepts_results_from_before_diagnostics(self):
+        result = {
+            "id": "legacy", "category": "simple", "question": "查询客户",
+            "generated_sql": "SELECT name FROM customers", "execution_match": False,
+            "exact_match": False, "error": None,
+            "detail": {"expected_row_count": 1, "generated_row_count": 1},
+        }
+        report = Evaluator(db_client=FakeDatabase({})).generate_report([result])
+        self.assertIn("legacy", report)
 
 
 if __name__ == "__main__":
