@@ -1,5 +1,5 @@
 """
-第5课实战版本0：Zero-shot 基础版
+Text2SQL 版本 0：Zero-shot 基础版
 
 仅提供角色定义和用户问题，不注入任何 Schema 信息。
 展示无 Schema 信息时 LLM 生成 SQL 的准确性边界。

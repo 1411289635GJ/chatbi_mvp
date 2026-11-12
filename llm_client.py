@@ -4,7 +4,7 @@ LLM 客户端模块
 负责调用大模型 API 生成 SQL。
 将 LLM 调用封装为独立模块，便于后续切换不同模型或增加重试逻辑。
 
-第11课增强：新增 generate_sql_stream 流式方法，逐 chunk 产出 SQL 文本，
+generate_sql_stream 流式方法逐 chunk 产出 SQL 文本，
 为 SSE 推送提供底层能力。保留原有 generate_sql 不动，确保向后兼容。
 """
 

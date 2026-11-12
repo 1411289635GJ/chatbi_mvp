@@ -9,10 +9,14 @@
 - Exact Match Accuracy：生成 SQL 的字符串与预期 SQL 完全一致（仅供参考，非主要指标）
 """
 
+from __future__ import annotations
+
 import json
 import re
-from typing import Callable, Optional
-from database import DatabaseClient
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from database import DatabaseClient
 
 
 class Evaluator:
@@ -23,7 +27,10 @@ class Evaluator:
         Args:
             db_client: 数据库客户端实例，如未传入则自动创建
         """
-        self.db = db_client or DatabaseClient()
+        if db_client is None:
+            from database import DatabaseClient
+            db_client = DatabaseClient()
+        self.db = db_client
 
     def load_test_cases(self, path: str = "test_cases.json") -> list[dict]:
         """从 JSON 文件加载测试用例"""
@@ -39,7 +46,7 @@ class Evaluator:
         评估单个测试用例
 
         Args:
-            case: 测试用例字典，包含 question、expected_sql 等字段
+            case: 测试用例字典；order_sensitive 可设为 True 以比较行顺序
             sql_generator: 接收问题字符串、返回生成 SQL 的可调用对象
 
         Returns:
@@ -47,6 +54,9 @@ class Evaluator:
         """
         question = case["question"]
         expected_sql = case["expected_sql"]
+        order_sensitive = case.get("order_sensitive", False)
+        if not isinstance(order_sensitive, bool):
+            raise ValueError("order_sensitive 必须是布尔值")
 
         result = {
             "id": case.get("id", "unknown"),
@@ -90,14 +100,16 @@ class Evaluator:
         # 4. 对比执行结果
         result["execution_match"] = self._results_equivalent(
             gen_columns, gen_results, generated_sql,
-            exp_columns, exp_results, expected_sql
+            exp_columns, exp_results, expected_sql,
+            order_sensitive=order_sensitive,
         )
 
         result["detail"] = {
             "expected_columns": exp_columns,
             "expected_row_count": len(exp_results),
             "generated_columns": gen_columns,
-            "generated_row_count": len(gen_results)
+            "generated_row_count": len(gen_results),
+            "order_sensitive": order_sensitive,
         }
 
         return result
@@ -137,13 +149,15 @@ class Evaluator:
             if r["error"]:
                 categories[cat]["error"] += 1
 
+        execution_rate = f"{execution_correct/total*100:.1f}%" if total else "N/A"
+        exact_rate = f"{exact_correct/total*100:.1f}%" if total else "N/A"
         lines = [
             "=" * 60,
             "ChatBI Text2SQL 评估报告",
             "=" * 60,
             f"总用例数：{total}",
-            f"Execution Accuracy：{execution_correct}/{total} = {execution_correct/total*100:.1f}%",
-            f"Exact Match Accuracy：{exact_correct}/{total} = {exact_correct/total*100:.1f}%",
+            f"Execution Accuracy：{execution_correct}/{total} = {execution_rate}",
+            f"Exact Match Accuracy：{exact_correct}/{total} = {exact_rate}",
             f"执行失败数：{error_count}",
             "",
             "按难度分类统计：",
@@ -181,7 +195,8 @@ class Evaluator:
         gen_sql: str,
         exp_columns: list,
         exp_results: list,
-        exp_sql: str
+        exp_sql: str,
+        order_sensitive: bool = False,
     ) -> bool:
         """
         判定两组执行结果是否等价
@@ -192,7 +207,8 @@ class Evaluator:
         3. 根据查询类型决定是否检查列名：
            - 纯聚合查询（SELECT 中只有聚合函数/常量）：只比较值，忽略列名
            - 其他查询：比较列名+值
-        4. 对结果排序后逐行比对（忽略行顺序）
+        4. 默认忽略行顺序；order_sensitive=True 时逐行比较
+        5. 保留重复列名，并区分 SQL NULL 和字符串
         """
         if len(gen_columns) != len(exp_columns):
             return False
@@ -204,15 +220,22 @@ class Evaluator:
             self._should_check_column_names(exp_sql) or
             self._should_check_column_names(gen_sql)
         )
+        if check_columns and sorted(gen_columns) != sorted(exp_columns):
+            return False
 
         def normalize_rows(columns, rows, use_column_names: bool = True):
+            def normalize_value(value):
+                return ("null", "") if value is None else ("value", str(value))
+
             if use_column_names:
-                # 按列名排序后重组每行数据
-                indexed = [{col: str(val) for col, val in zip(columns, row)} for row in rows]
-                return sorted([tuple(sorted(d.items())) for d in indexed])
+                # 保留重复列名，允许结果中的列次序不同。
+                normalized = [
+                    tuple(sorted((col, normalize_value(val)) for col, val in zip(columns, row)))
+                    for row in rows
+                ]
             else:
-                # 忽略列名，只比较值的顺序
-                return sorted([tuple(str(val) for val in row) for row in rows])
+                normalized = [tuple(normalize_value(val) for val in row) for row in rows]
+            return normalized if order_sensitive else sorted(normalized)
 
         gen_normalized = normalize_rows(gen_columns, gen_results, check_columns)
         exp_normalized = normalize_rows(exp_columns, exp_results, check_columns)

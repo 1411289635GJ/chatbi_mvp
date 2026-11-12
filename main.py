@@ -3,12 +3,12 @@
 
 整合所有模块，提供命令行交互界面。
 这是 ChatBI Text2SQL 系统的统一入口，串联 query_parser → prompt_builder → llm_client → database → result_formatter 完整链路，
-并整合第 7 课规则修复、第 9 课指标知识注入、第 18 课 Schema Linking 和第 19 课指标 RAG。
+并整合业务规则、指标知识、Schema Linking 和指标 RAG。
 
-第11课增强：新增 run_stream 流式方法，按阶段 yield 事件，
+run_stream 方法按阶段 yield 事件，
 为 SSE 推送提供业务层能力。保留原有 run 方法不动，确保向后兼容。
 
-第20课增强：新增 use_schema_linking 和 use_indicator_rag 参数，
+提供 use_schema_linking 和 use_indicator_rag 参数，
 支持 Schema Linking（动态 Schema 注入）+ 指标 RAG（语义检索指标知识）。
 两者可独立开关，均有 fallback 机制保障稳定性。
 """
@@ -122,9 +122,9 @@ class ChatBISystem:
             use_few_shot: 是否使用 Few-shot
             use_rules: 是否启用业务规则
             use_guards: 是否启用错误防护
-            use_indicator_knowledge: 是否启用指标知识注入（关键词匹配，第9课）
-            use_schema_linking: 是否启用 Schema Linking 动态注入（第18课）
-            use_indicator_rag: 是否启用指标 RAG 语义检索（第19课，替代关键词匹配）
+            use_indicator_knowledge: 是否启用指标知识注入（关键词匹配）
+            use_schema_linking: 是否启用 Schema Linking 动态注入
+            use_indicator_rag: 是否启用指标 RAG 语义检索（可替代关键词匹配）
             security_context: 当前请求的权限上下文
 
         Returns:
@@ -320,9 +320,9 @@ class ChatBISystem:
             use_few_shot: 是否使用 Few-shot
             use_rules: 是否启用业务规则
             use_guards: 是否启用错误防护
-            use_indicator_knowledge: 是否启用指标知识注入（关键词匹配，第9课）
-            use_schema_linking: 是否启用 Schema Linking 动态注入（第18课）
-            use_indicator_rag: 是否启用指标 RAG 语义检索（第19课）
+            use_indicator_knowledge: 是否启用指标知识注入（关键词匹配）
+            use_schema_linking: 是否启用 Schema Linking 动态注入
+            use_indicator_rag: 是否启用指标 RAG 语义检索
             security_context: 当前请求的权限上下文
 
         Yields:

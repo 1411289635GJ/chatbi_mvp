@@ -3,7 +3,7 @@ FastAPI 服务入口
 
 将命令行版 ChatBI 系统封装为 REST API，供前端或其他服务调用。
 
-第11课增强：
+接口支持：
 - 新增 POST /api/v1/query/stream SSE 流式端点
 - 新增 CORS 中间件（前后端分离必须）
 - 挂载 static 目录为静态文件服务（前端 HTML）

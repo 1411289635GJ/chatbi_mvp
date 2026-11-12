@@ -1,8 +1,8 @@
 """
-第5课实战版本2：COT + 结构化约束（ICIO 框架）
+Text2SQL 版本 2：思考步骤与结构化约束
 
 在 v1 基础上增加 Chain-of-Thought 引导与结构化输出约束，
-展示 Prompt 工程进阶技巧的效果。
+用于观察附加步骤和约束对 SQL 生成的影响。
 
 运行方式：
     uv run python text2sql_v2.py

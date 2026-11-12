@@ -1,7 +1,7 @@
 """
 Schema Linking Pipeline 编排模块
 
-第 18 课：将表召回（table_retriever）、字段匹配（field_matcher）、
+将表召回（table_retriever）、字段匹配（field_matcher）、
 Join 推理（join_resolver）三个模块串联为完整 Pipeline。
 
 输入：用户的自然语言问题

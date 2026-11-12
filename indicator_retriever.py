@@ -1,15 +1,15 @@
 """
 指标 RAG 检索模块
 
-第 19 课：用语义检索（LangChain + ChromaDB）替代原 indicator_knowledge.py 的纯关键词匹配。
+使用 LangChain 和 ChromaDB 进行指标语义检索。
 从完整指标知识库（indicators_full.json）中检索与用户问题相关的指标定义和计算公式。
 
 核心改进：
-- 关键词匹配 → 语义检索（能理解"各产品线赚了多少" ≈ "产品线收入"）
-- 5 个指标 → 13 个核心指标（完整覆盖业务分析场景）
+- 使用语义检索查找与问题相关的指标定义。
+- 使用完整指标知识库中的指标定义。
 - 支持依赖指标自动展开（检索到"利润"时自动注入"毛利""期间费用"）
 
-复用第 15 课的 LangChain + ChromaDB 基础设施。
+复用 LangChain 和 ChromaDB 基础设施。
 """
 
 import os
@@ -35,7 +35,7 @@ def _cosine_relevance_score_fn(distance: float) -> float:
 
 
 def get_embeddings() -> OpenAIEmbeddings:
-    """构建 LangChain OpenAI Embeddings 实例（复用第 15 课配置）"""
+    """构建 LangChain OpenAI Embeddings 实例（复用模型配置）"""
     return OpenAIEmbeddings(
         model=LLM_CONFIG["embedding_model"],
         base_url=LLM_CONFIG["base_url"],
