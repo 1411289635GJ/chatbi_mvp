@@ -31,6 +31,22 @@ from chatbi.core.runtime_factory import build_runtime
 from chatbi.core.security import SecurityError, UserContext
 
 
+class IndicatorKnowledgeError(Exception):
+    """指标知识不可用时携带不包含底层异常的追踪信息。"""
+
+    def __init__(self, metadata: dict[str, str | bool]):
+        super().__init__("指标知识获取失败")
+        self.metadata = metadata
+
+    def as_result(self) -> dict:
+        return {
+            "success": False,
+            "error": str(self),
+            "error_type": "indicator_knowledge",
+            "metadata": self.metadata,
+        }
+
+
 class ChatBISystem:
     """ChatBI 系统主类"""
 
@@ -99,16 +115,17 @@ class ChatBISystem:
                 indicator_block = ""
                 indicator_trace["indicator_rag_status"] = "error"
 
-            if use_indicator_knowledge and not indicator_block:
+        if use_indicator_knowledge and (not use_indicator_rag or not indicator_block):
+            try:
                 context = indicator_knowledge.get_indicator_context(user_question)
                 detected_indicators = context["detected_indicators"]
                 indicator_block = context["indicator_block"]
-                if indicator_block:
-                    indicator_trace["indicator_source"] = "keyword"
-        elif use_indicator_knowledge:
-            context = indicator_knowledge.get_indicator_context(user_question)
-            detected_indicators = context["detected_indicators"]
-            indicator_block = context["indicator_block"]
+            except Exception as exc:
+                raise IndicatorKnowledgeError({
+                    **indicator_trace,
+                    "used_indicator_rag": use_indicator_rag,
+                    "used_indicator_knowledge": use_indicator_knowledge,
+                }) from exc
             if indicator_block:
                 indicator_trace["indicator_source"] = "keyword"
 
@@ -171,12 +188,15 @@ class ChatBISystem:
             }
 
         # 2. 指标知识注入（二选一：RAG 优先，关键词匹配兜底）
-        detected_indicators, indicator_block, indicator_trace = self._resolve_indicator_context(
-            user_question=user_question,
-            use_indicator_knowledge=use_indicator_knowledge,
-            use_indicator_rag=use_indicator_rag,
-            indicator_knowledge=runtime.indicator_knowledge,
-        )
+        try:
+            detected_indicators, indicator_block, indicator_trace = self._resolve_indicator_context(
+                user_question=user_question,
+                use_indicator_knowledge=use_indicator_knowledge,
+                use_indicator_rag=use_indicator_rag,
+                indicator_knowledge=runtime.indicator_knowledge,
+            )
+        except IndicatorKnowledgeError as exc:
+            return exc.as_result()
 
         # 3. 构造 Prompt（Schema Linking 在 build_prompt 内部处理）
         system_msg, prompt = build_prompt(
@@ -374,12 +394,16 @@ class ChatBISystem:
             return
 
         # 2. 指标知识注入（二选一：RAG 优先，关键词匹配兜底）
-        detected_indicators, indicator_block, indicator_trace = self._resolve_indicator_context(
-            user_question=user_question,
-            use_indicator_knowledge=use_indicator_knowledge,
-            use_indicator_rag=use_indicator_rag,
-            indicator_knowledge=runtime.indicator_knowledge,
-        )
+        try:
+            detected_indicators, indicator_block, indicator_trace = self._resolve_indicator_context(
+                user_question=user_question,
+                use_indicator_knowledge=use_indicator_knowledge,
+                use_indicator_rag=use_indicator_rag,
+                indicator_knowledge=runtime.indicator_knowledge,
+            )
+        except IndicatorKnowledgeError as exc:
+            yield _sse_event("error", exc.as_result())
+            return
 
         # 3. 构造 Prompt
         system_msg, prompt = build_prompt(

@@ -186,6 +186,71 @@ class IndicatorTraceTests(unittest.TestCase):
         keyword.get_indicator_context.assert_not_called()
         rag.retrieve_indicator_context.assert_not_called()
 
+    def test_keyword_failure_stops_sync_and_stream_before_query(self):
+        keyword_secret = "private-keyword-exception-detail"
+        rag_secret = "private-rag-exception-detail"
+        for stream in (False, True):
+            for rag_status in ("disabled", "empty", "error"):
+                with self.subTest(stream=stream, rag_status=rag_status):
+                    system, keyword = make_system()
+                    keyword.get_indicator_context.side_effect = RuntimeError(keyword_secret)
+                    rag = (rag_module(error=RuntimeError(rag_secret)) if rag_status == "error"
+                           else rag_module({"detected_indicators": [], "indicator_block": ""}))
+                    with (
+                        patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}),
+                        patch.object(MAIN, "build_prompt") as prompt_builder,
+                        patch.object(system.llm, "generate_sql") as generate_sql,
+                        patch.object(system.llm, "generate_sql_stream") as generate_sql_stream,
+                        patch.object(system.db, "execute") as execute,
+                    ):
+                        options = {
+                            "use_indicator_knowledge": True,
+                            "use_indicator_rag": rag_status != "disabled",
+                        }
+                        if stream:
+                            events = list(system.run_stream("问题", **options))
+                            event_type, data_line = events[-1].strip().split("\n", 1)
+                            self.assertEqual(event_type, "event: error")
+                            result = json.loads(data_line.removeprefix("data: "))
+                        else:
+                            result = system.run("问题", **options)
+                            self.assertFalse(result["success"])
+
+                        self.assertEqual(result["error_type"], "indicator_knowledge")
+                        self.assert_trace(result["metadata"], "none", rag_status)
+                        self.assertNotIn(keyword_secret, json.dumps(result, ensure_ascii=False))
+                        self.assertNotIn(rag_secret, json.dumps(result, ensure_ascii=False))
+                        keyword.get_indicator_context.assert_called_once_with("问题")
+                        prompt_builder.assert_not_called()
+                        generate_sql.assert_not_called()
+                        generate_sql_stream.assert_not_called()
+                        execute.assert_not_called()
+
+    def test_keyword_only_success_keeps_original_query_flow(self):
+        for stream in (False, True):
+            with self.subTest(stream=stream):
+                system, keyword = make_system({
+                    "detected_indicators": ["收入"],
+                    "indicator_block": "keyword content",
+                })
+                prompt_builder = Mock(return_value=("system", "prompt"))
+                with (
+                    patch.object(MAIN, "build_prompt", prompt_builder),
+                    patch.object(system.db, "execute", wraps=system.db.execute) as execute,
+                ):
+                    if stream:
+                        events = list(system.run_stream("问题", use_indicator_knowledge=True, use_indicator_rag=False))
+                        event_type, data_line = events[-1].strip().split("\n", 1)
+                        self.assertEqual(event_type, "event: result")
+                        result = json.loads(data_line.removeprefix("data: "))
+                    else:
+                        result = system.run("问题", use_indicator_knowledge=True, use_indicator_rag=False)
+                        self.assertTrue(result["success"])
+                    self.assert_trace(result["metadata"], "keyword", "disabled")
+                    self.assertEqual(prompt_builder.call_args.kwargs["indicator_knowledge"], "keyword content")
+                    keyword.get_indicator_context.assert_called_once_with("问题")
+                    execute.assert_called_once()
+
     def test_sync_and_stream_trace_on_success_and_failure(self):
         secret = "private-rag-exception-detail"
         cases = (

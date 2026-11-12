@@ -258,12 +258,12 @@ def health_check() -> HealthResponse:
         403: {"model": ErrorResponse, "description": "权限不足或安全策略拒绝"},
         422: {"model": ErrorResponse, "description": "生成的 SQL 无法执行"},
         502: {"model": ErrorResponse, "description": "LLM 调用失败"},
-        503: {"model": ErrorResponse, "description": "数据库连接异常"},
+        503: {"model": ErrorResponse, "description": "数据库连接或指标知识不可用"},
         504: {"model": ErrorResponse, "description": "数据库查询超时"},
         500: {"model": ErrorResponse, "description": "数据库或服务内部异常"},
     },
 )
-def query_chatbi(payload: QueryRequest, request: Request) -> QuerySuccessResponse:
+def query_chatbi(payload: QueryRequest, request: Request) -> QuerySuccessResponse | JSONResponse:
     """执行自然语言查询，并返回标准化结果（同步，一次性返回）"""
     started_at = perf_counter()
     logger.info("Received question: %s", payload.question)
@@ -281,6 +281,15 @@ def query_chatbi(payload: QueryRequest, request: Request) -> QuerySuccessRespons
 
     if not result["success"]:
         error_type = result.get("error_type", "internal_server_error")
+        if error_type == "indicator_knowledge":
+            return JSONResponse(
+                status_code=503,
+                content=ErrorResponse(
+                    error=result["error"],
+                    error_type=error_type,
+                    metadata=result.get("metadata", {}),
+                ).model_dump(),
+            )
         status_code = 500
         if error_type == "validation":
             status_code = 400
