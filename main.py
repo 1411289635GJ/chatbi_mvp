@@ -75,10 +75,14 @@ class ChatBISystem:
         use_indicator_knowledge: bool,
         use_indicator_rag: bool,
         indicator_knowledge: IndicatorKnowledge,
-    ) -> tuple[list[str], str]:
-        """统一解析指标上下文，避免 RAG/关键词路径重复执行同一检索逻辑。"""
+    ) -> tuple[list[str], str, dict[str, str]]:
+        """解析指标上下文并记录实际来源与 RAG 状态。"""
         detected_indicators = []
         indicator_block = ""
+        indicator_trace = {
+            "indicator_source": "none",
+            "indicator_rag_status": "disabled",
+        }
 
         if use_indicator_rag:
             try:
@@ -87,20 +91,28 @@ class ChatBISystem:
                 context = retrieve_indicator_context(user_question)
                 detected_indicators = context["detected_indicators"]
                 indicator_block = context["indicator_block"]
+                indicator_trace["indicator_rag_status"] = "matched" if indicator_block else "empty"
+                if indicator_block:
+                    indicator_trace["indicator_source"] = "rag"
             except Exception:
                 detected_indicators = []
                 indicator_block = ""
+                indicator_trace["indicator_rag_status"] = "error"
 
             if use_indicator_knowledge and not indicator_block:
                 context = indicator_knowledge.get_indicator_context(user_question)
                 detected_indicators = context["detected_indicators"]
                 indicator_block = context["indicator_block"]
+                if indicator_block:
+                    indicator_trace["indicator_source"] = "keyword"
         elif use_indicator_knowledge:
             context = indicator_knowledge.get_indicator_context(user_question)
             detected_indicators = context["detected_indicators"]
             indicator_block = context["indicator_block"]
+            if indicator_block:
+                indicator_trace["indicator_source"] = "keyword"
 
-        return detected_indicators, indicator_block
+        return detected_indicators, indicator_block, indicator_trace
 
     def run(
         self,
@@ -159,7 +171,7 @@ class ChatBISystem:
             }
 
         # 2. 指标知识注入（二选一：RAG 优先，关键词匹配兜底）
-        detected_indicators, indicator_block = self._resolve_indicator_context(
+        detected_indicators, indicator_block, indicator_trace = self._resolve_indicator_context(
             user_question=user_question,
             use_indicator_knowledge=use_indicator_knowledge,
             use_indicator_rag=use_indicator_rag,
@@ -186,6 +198,7 @@ class ChatBISystem:
                 "error_type": "llm",
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_rules": use_rules,
                     "used_guards": use_guards,
@@ -211,6 +224,7 @@ class ChatBISystem:
                 "formatted": formatted,
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_few_shot": use_few_shot,
                     "used_rules": use_rules,
@@ -235,6 +249,7 @@ class ChatBISystem:
                 "error_type": "security",
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_few_shot": use_few_shot,
                     "used_rules": use_rules,
@@ -255,6 +270,7 @@ class ChatBISystem:
                 "error_type": f"database_{e.error_type}",
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_few_shot": use_few_shot,
                     "used_rules": use_rules,
@@ -278,6 +294,7 @@ class ChatBISystem:
                 "error_type": "database",
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_few_shot": use_few_shot,
                     "used_rules": use_rules,
@@ -357,7 +374,7 @@ class ChatBISystem:
             return
 
         # 2. 指标知识注入（二选一：RAG 优先，关键词匹配兜底）
-        detected_indicators, indicator_block = self._resolve_indicator_context(
+        detected_indicators, indicator_block, indicator_trace = self._resolve_indicator_context(
             user_question=user_question,
             use_indicator_knowledge=use_indicator_knowledge,
             use_indicator_rag=use_indicator_rag,
@@ -388,6 +405,7 @@ class ChatBISystem:
                 "error_type": "llm",
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_indicator_knowledge": use_indicator_knowledge,
                     "used_schema_linking": use_schema_linking,
@@ -416,6 +434,7 @@ class ChatBISystem:
                 "row_count": len(results),
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_few_shot": use_few_shot,
                     "used_rules": use_rules,
@@ -438,6 +457,7 @@ class ChatBISystem:
                 "sql": sql,
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_indicator_knowledge": use_indicator_knowledge,
                     "used_schema_linking": use_schema_linking,
@@ -454,6 +474,7 @@ class ChatBISystem:
                 "sql": sql,
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_indicator_knowledge": use_indicator_knowledge,
                     "used_schema_linking": use_schema_linking,
@@ -473,6 +494,7 @@ class ChatBISystem:
                 "sql": sql,
                 "metadata": {
                     "detected_indicators": detected_indicators,
+                    **indicator_trace,
                     "model": LLM_CONFIG["model"],
                     "used_indicator_knowledge": use_indicator_knowledge,
                     "used_schema_linking": use_schema_linking,
