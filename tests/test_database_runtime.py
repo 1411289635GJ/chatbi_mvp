@@ -6,12 +6,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from database import (
+from chatbi.core.database import (
     DatabaseClient,
     DatabaseConnectionPool,
     QueryExecutionError,
 )
-from security import UserContext
+from chatbi.core.security import UserContext
 
 
 class ExplainableCursor:
@@ -167,7 +167,7 @@ def test_connection_pool_reuses_idle_connections():
 
 
 def test_chatbi_system_returns_granular_database_error_type_for_timeout():
-    from main import ChatBISystem
+    from chatbi.main import ChatBISystem
 
     class FakeParser:
         def parse(self, question: str) -> str:

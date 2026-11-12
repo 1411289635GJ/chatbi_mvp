@@ -5,7 +5,7 @@ Schema 自动生成工具
 替代完全手写的方式。
 
 运行方式：
-    uv run python schema_generator.py
+    uv run python -m chatbi.tools.schema_generator
 """
 
 import os

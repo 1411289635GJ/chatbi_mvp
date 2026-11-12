@@ -17,12 +17,13 @@ import json
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from config import LLM_CONFIG
+from chatbi.core.config import LLM_CONFIG
+from chatbi.paths import PROJECT_ROOT
 
 
 # ==================== 配置 ====================
-INDICATORS_FILE = os.path.join(os.path.dirname(__file__), "indicators_full.json")
-CHROMA_PERSIST_DIR = os.path.join(os.path.dirname(__file__), "chroma_db", "indicators")
+INDICATORS_FILE = os.path.join(PROJECT_ROOT, "indicators_full.json")
+CHROMA_PERSIST_DIR = os.path.join(PROJECT_ROOT, "chroma_db", "indicators")
 
 
 def _cosine_relevance_score_fn(distance: float) -> float:
@@ -305,7 +306,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     # 模拟旧的关键词匹配
-    from indicator_knowledge import IndicatorKnowledge
+    from chatbi.retrieval.indicator_knowledge import IndicatorKnowledge
     old_ik = IndicatorKnowledge()
 
     compare_questions = [

@@ -10,11 +10,15 @@
 import json
 from typing import Optional
 
+from chatbi.paths import PROJECT_ROOT
+
 
 class IndicatorKnowledge:
     """指标知识模块：加载指标定义、识别问题中的指标、生成指标知识文本"""
 
-    def __init__(self, config_path: str = "indicators.json"):
+    def __init__(self, config_path: str | None = None):
+        if config_path is None:
+            config_path = PROJECT_ROOT / "indicators.json"
         with open(config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         self.indicators = {ind["name"]: ind for ind in data["indicators"]}

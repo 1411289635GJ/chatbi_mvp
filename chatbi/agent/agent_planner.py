@@ -18,10 +18,10 @@ from typing import Any, Callable, Literal
 import pymysql
 from pydantic import BaseModel, Field
 
-from config import DB_CONFIG
-from main import ChatBISystem
-from query_decomposer import DecompositionPlan, DecomposedTask, QueryDecomposer
-from report_generator import ReportGenerator
+from chatbi.core.config import DB_CONFIG
+from chatbi.main import ChatBISystem
+from chatbi.agent.query_decomposer import DecompositionPlan, DecomposedTask, QueryDecomposer
+from chatbi.agent.report_generator import ReportGenerator
 
 
 class PlanStep(BaseModel):

@@ -5,7 +5,7 @@ Text2SQL 版本 0：Zero-shot 基础版
 展示无 Schema 信息时 LLM 生成 SQL 的准确性边界。
 
 运行方式：
-    uv run python text2sql_v0.py
+    uv run python -m examples.text2sql_v0
 """
 
 import os

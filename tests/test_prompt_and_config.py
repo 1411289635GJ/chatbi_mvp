@@ -3,8 +3,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from llm_client import LLMClient
-from prompt_builder import build_prompt
+from chatbi.core.llm_client import LLMClient
+from chatbi.core.prompt_builder import build_prompt
 
 
 def test_build_prompt_keeps_curdate_rule_for_recent_months():

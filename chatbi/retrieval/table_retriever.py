@@ -12,7 +12,8 @@ import os
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from config import LLM_CONFIG
+from chatbi.core.config import LLM_CONFIG
+from chatbi.paths import PROJECT_ROOT
 
 
 # ==================== 表描述数据 ====================
@@ -106,7 +107,7 @@ TABLE_METADATA = {
 
 
 # ==================== ChromaDB 持久化目录 ====================
-CHROMA_PERSIST_DIR = os.path.join(os.path.dirname(__file__), "chroma_db", "tables")
+CHROMA_PERSIST_DIR = os.path.join(PROJECT_ROOT, "chroma_db", "tables")
 
 
 def _cosine_relevance_score_fn(distance: float) -> float:

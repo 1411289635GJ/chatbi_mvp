@@ -1,7 +1,7 @@
 import sqlite3
 import unittest
 
-from evaluator import Evaluator
+from chatbi.evaluation.evaluator import Evaluator
 
 
 class FakeDatabase:

@@ -12,11 +12,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import re
 from typing import TYPE_CHECKING, Callable, Optional
 
+from chatbi.paths import PROJECT_ROOT
+
 if TYPE_CHECKING:
-    from database import DatabaseClient
+    from chatbi.core.database import DatabaseClient
 
 
 class Evaluator:
@@ -28,11 +31,11 @@ class Evaluator:
             db_client: 数据库客户端实例，如未传入则自动创建
         """
         if db_client is None:
-            from database import DatabaseClient
+            from chatbi.core.database import DatabaseClient
             db_client = DatabaseClient()
         self.db = db_client
 
-    def load_test_cases(self, path: str = "test_cases.json") -> list[dict]:
+    def load_test_cases(self, path: str | Path = PROJECT_ROOT / "test_cases.json") -> list[dict]:
         """从 JSON 文件加载测试用例"""
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -304,7 +307,7 @@ class Evaluator:
 
 def run_evaluation(
     sql_generator: Callable[[str], str],
-    test_cases_path: str = "test_cases.json"
+    test_cases_path: str | Path = PROJECT_ROOT / "test_cases.json"
 ) -> None:
     """
     运行完整评估流程并打印报告
@@ -322,8 +325,8 @@ def run_evaluation(
 if __name__ == "__main__":
     # 示例：使用系统默认方式生成 SQL 进行自测
     import sys
-    from prompt_builder import build_prompt
-    from llm_client import LLMClient
+    from chatbi.core.prompt_builder import build_prompt
+    from chatbi.core.llm_client import LLMClient
 
     llm = LLMClient()
 
@@ -331,5 +334,5 @@ if __name__ == "__main__":
         system_msg, prompt = build_prompt(question, use_rules=True, use_guards=True)
         return llm.generate_sql(system_msg, prompt)
 
-    path = sys.argv[1] if len(sys.argv) > 1 else "test_cases.json"
+    path = sys.argv[1] if len(sys.argv) > 1 else PROJECT_ROOT / "test_cases.json"
     run_evaluation(generate_sql, path)

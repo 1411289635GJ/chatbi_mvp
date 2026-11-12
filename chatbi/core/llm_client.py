@@ -11,7 +11,7 @@ generate_sql_stream 流式方法逐 chunk 产出 SQL 文本，
 import re
 from typing import Generator
 from openai import OpenAI
-from config import LLM_CONFIG
+from chatbi.core.config import LLM_CONFIG
 
 
 class LLMClient:

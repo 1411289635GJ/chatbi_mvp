@@ -22,36 +22,57 @@ ChatBI MVP 是一个基于自然语言的数据查询与分析项目。它将用
 
 `used_indicator_rag` 是原有的功能开关，表示是否启用 RAG，并不代表最终使用了 RAG 的结果。当 RAG 返回空知识或发生异常，且关键词路径开启时，系统会尝试关键词匹配。异常状态不包含异常原文；非空知识不代表内容正确。上述字段出现在主查询及流式事件的相应元数据中，同步 API 的成功响应会透传元数据；同步 API 的错误响应目前不会透传这些字段。关键词匹配自身若抛出异常，现有流程会将异常继续抛出，无法保证返回这些追踪字段。
 
+## 目录结构
+
+```text
+chatbi/
+├── main.py             # 主查询链路
+├── api_service.py      # HTTP / SSE 服务
+├── paths.py            # 项目根路径
+├── core/               # 配置、模型、数据库、安全和 Prompt
+├── retrieval/          # 指标检索、Schema 与关联路径
+├── agent/              # 任务拆解、多步执行与报告
+├── evaluation/         # SQL 评估与错误分析
+└── tools/              # 数据库结构提取工具
+examples/               # 独立原型和练习脚本
+tests/                  # 测试
+static/                 # 前端静态文件
+main.py                 # 原 CLI 兼容入口
+api_service.py          # 原 API 兼容入口
+```
+
+指标定义和测试用例 JSON 保留在项目根目录，Chroma 索引继续使用根目录下的 `chroma_db/`。原有根目录 CLI 和 API 启动命令仍可使用；其余模块通过 `chatbi` 包导入。
+
 ## 主要模块
 
 | 模块 | 作用及入口 |
 | --- | --- |
-| `main.py` | 统一查询入口；`ChatBISystem.run()` 和 `run_stream()` 分别处理普通和流式查询 |
-| `query_parser.py` | 输入预处理和非空检查；`QueryParser.parse()`、`validate()` |
-| `prompt_builder.py` | 组合 Schema、示例、规则和指标知识；`build_prompt()` |
-| `llm_client.py` | 模型文本、SQL 和流式调用；`LLMClient` |
-| `database.py` | MySQL 连接与查询执行，包含连接池、异常分型和慢查询信息；`DatabaseClient.execute()` |
-| `security.py` | SQL 检查、权限上下文、行过滤和结果脱敏；`QuerySecurityManager` |
-| `result_formatter.py` | 格式化查询结果与错误信息；`ResultFormatter.format()`、`format_error()` |
-| `config.py` | 数据源、模型、运行参数及功能开关配置；`APP_CONFIG` |
-| `runtime_factory.py` | 根据配置组装运行时和数据库客户端；`build_runtime()` |
-| `api_service.py` | FastAPI 接口，包括同步查询、SSE 流式查询和健康检查 |
-| `schema_generator.py` | 从 MySQL 元数据提取表、字段及已声明的外键，生成 Schema 文本 |
+| `chatbi/main.py` | 统一查询入口；`ChatBISystem.run()` 和 `run_stream()` 分别处理普通和流式查询 |
+| `chatbi/core/query_parser.py` | 输入预处理和非空检查；`QueryParser.parse()`、`validate()` |
+| `chatbi/core/prompt_builder.py` | 组合 Schema、示例、规则和指标知识；`build_prompt()` |
+| `chatbi/core/llm_client.py` | 模型文本、SQL 和流式调用；`LLMClient` |
+| `chatbi/core/database.py` | MySQL 连接与查询执行，包含连接池、异常分型和慢查询信息；`DatabaseClient.execute()` |
+| `chatbi/core/security.py` | SQL 检查、权限上下文、行过滤和结果脱敏；`QuerySecurityManager` |
+| `chatbi/core/result_formatter.py` | 格式化查询结果与错误信息；`ResultFormatter.format()`、`format_error()` |
+| `chatbi/core/config.py` | 数据源、模型、运行参数及功能开关配置；`APP_CONFIG` |
+| `chatbi/core/runtime_factory.py` | 根据配置组装运行时和数据库客户端；`build_runtime()` |
+| `chatbi/api_service.py` | FastAPI 接口，包括同步查询、SSE 流式查询和健康检查 |
+| `chatbi/tools/schema_generator.py` | 从 MySQL 元数据提取表、字段及已声明的外键，生成 Schema 文本 |
 
 ## 检索、分析与评估
 
 | 模块 | 作用及入口 |
 | --- | --- |
-| `indicator_knowledge.py`、`indicators.json` | 通过关键词识别指标，组织指标定义；`get_indicator_context()` |
-| `indicator_retriever.py`、`indicators_full.json` | 检索指标定义及依赖信息；`retrieve_indicator_context()` |
-| `table_retriever.py`、`field_matcher.py` | 表召回和字段匹配；`retrieve_tables()`、`match_fields()` |
-| `join_resolver.py`、`schema_linker.py` | 推导关联路径，组装与查询相关的 Schema；`resolve_joins()`、`schema_link()` |
-| `query_decomposer.py`、`agent_planner.py` | 拆解复杂问题，生成并执行分析计划；`QueryDecomposer`、`PlanAndExecuteAgent` |
-| `report_generator.py` | 整理多步分析结果，生成报告；`ReportGenerator` |
-| `error_analyzer.py` | 分类和分析 SQL 生成错误；`ErrorAnalyzer` |
-| `evaluator.py`、`test_cases.json` | 根据测试用例评估生成 SQL，包括执行结果和文本匹配的比较 |
-| `vector_search_demo.py` | 向量生成与相似度检索的独立演示 |
-| `text2sql_v0.py`、`text2sql_v1.py`、`text2sql_v2.py` | 保留不同 Prompt 构造方式的独立原型；这些脚本输出 SQL，不执行数据库查询 |
+| `chatbi/retrieval/indicator_knowledge.py`、`indicators.json` | 通过关键词识别指标，组织指标定义；`get_indicator_context()` |
+| `chatbi/retrieval/indicator_retriever.py`、`indicators_full.json` | 检索指标定义及依赖信息；`retrieve_indicator_context()` |
+| `chatbi/retrieval/table_retriever.py`、`chatbi/retrieval/field_matcher.py` | 表召回和字段匹配；`retrieve_tables()`、`match_fields()` |
+| `chatbi/retrieval/join_resolver.py`、`chatbi/retrieval/schema_linker.py` | 推导关联路径，组装与查询相关的 Schema；`resolve_joins()`、`schema_link()` |
+| `chatbi/agent/query_decomposer.py`、`chatbi/agent/agent_planner.py` | 拆解复杂问题，生成并执行分析计划；`QueryDecomposer`、`PlanAndExecuteAgent` |
+| `chatbi/agent/report_generator.py` | 整理多步分析结果，生成报告；`ReportGenerator` |
+| `chatbi/evaluation/error_analyzer.py` | 分类和分析 SQL 生成错误；`ErrorAnalyzer` |
+| `chatbi/evaluation/evaluator.py`、`test_cases.json` | 根据测试用例评估生成 SQL，包括执行结果和文本匹配的比较 |
+| `examples/vector_search_demo.py` | 向量生成与相似度检索的独立演示 |
+| `examples/text2sql_v0.py`、`examples/text2sql_v1.py`、`examples/text2sql_v2.py` | 保留不同 Prompt 构造方式的独立原型；这些脚本输出 SQL，不执行数据库查询 |
 
 ## 环境准备
 
@@ -61,9 +82,9 @@ ChatBI MVP 是一个基于自然语言的数据查询与分析项目。它将用
 uv sync
 ```
 
-根据 `.env.example` 在本地配置环境变量。模型调用使用 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`LLM_MODEL` 等配置；数据库连接使用 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME` 等配置。功能开关和默认值可查看 `config.py`。密钥与数据库密码应保存在本地环境中，不要提交到仓库。
+根据 `.env.example` 在本地配置环境变量。模型调用使用 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`LLM_MODEL` 等配置；数据库连接使用 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME` 等配置。功能开关和默认值可查看 `chatbi/core/config.py`。密钥与数据库密码应保存在本地环境中，不要提交到仓库。
 
-完整查询需要可连接的 MySQL 数据库和与项目 Schema、业务规则匹配的数据表；模型调用还需要可用的服务商配置。部分检索功能需要相应的向量模型与索引。`schema_generator.py` 可读取已有数据库的元数据，但不能替代业务指标口径的确认。
+完整查询需要可连接的 MySQL 数据库和与项目 Schema、业务规则匹配的数据表；模型调用还需要可用的服务商配置。部分检索功能需要相应的向量模型与索引。`chatbi/tools/schema_generator.py` 可读取已有数据库的元数据，但不能替代业务指标口径的确认。
 
 现有权限机制属于演示：请求中的角色可以由客户端提供，默认也有演示管理员上下文，不能作为可信身份认证。对外部署需要独立设计认证、授权及数据库侧权限控制。
 
@@ -82,12 +103,12 @@ uv run python main.py
 uv run uvicorn api_service:app --host 127.0.0.1 --port 8000
 ```
 
-API 入口包括 `POST /api/v1/query`、`POST /api/v1/query/stream` 和 `GET /health`。请求结构与可选参数以 `api_service.py` 中的 `QueryRequest` 为准。
+API 入口包括 `POST /api/v1/query`、`POST /api/v1/query/stream` 和 `GET /health`。请求结构与可选参数以 `chatbi/api_service.py` 中的 `QueryRequest` 为准。
 
 如只想观察自然语言生成 SQL 的原型，可运行：
 
 ```powershell
-uv run python text2sql_v1.py
+uv run python -m examples.text2sql_v1
 ```
 
 该原型仍会调用配置的模型服务，但不会执行生成的 SQL。SQL 能否执行及是否符合业务口径，需要进一步核验。

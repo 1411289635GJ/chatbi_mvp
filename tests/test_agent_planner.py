@@ -4,14 +4,14 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agent_planner import (
+from chatbi.agent.agent_planner import (
     PlanAndExecuteAgent,
     PlanGenerator,
     ResultSummarizer,
     StepExecutor,
     TempTableResultStore,
 )
-from report_generator import ReportGenerator
+from chatbi.agent.report_generator import ReportGenerator
 
 
 class FakeTempCursor:

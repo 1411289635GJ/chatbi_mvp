@@ -5,9 +5,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from main import ChatBISystem
-from database import DatabaseClient
-from security import QuerySecurityManager, SecurityError, UserContext
+from chatbi.main import ChatBISystem
+from chatbi.core.database import DatabaseClient
+from chatbi.core.security import QuerySecurityManager, SecurityError, UserContext
 
 
 class FakeCursor:

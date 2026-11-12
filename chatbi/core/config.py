@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import copy
 import os
+from chatbi.paths import PROJECT_ROOT
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 def _build_default_db_source() -> dict[str, object]:

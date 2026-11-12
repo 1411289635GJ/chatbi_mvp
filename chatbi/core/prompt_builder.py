@@ -153,7 +153,7 @@ def build_prompt(
     schema_text = SCHEMA
     if use_schema_linking:
         try:
-            from schema_linker import build_dynamic_prompt_schema
+            from chatbi.retrieval.schema_linker import build_dynamic_prompt_schema
             dynamic_schema = build_dynamic_prompt_schema(user_question)
             if dynamic_schema:
                 schema_text = dynamic_schema

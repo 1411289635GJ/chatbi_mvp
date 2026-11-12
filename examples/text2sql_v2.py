@@ -1,11 +1,11 @@
 """
-第5课实战版本1：手写 Schema + Few-shot
+Text2SQL 版本 2：思考步骤与结构化约束
 
-在 Zero-shot 基础上注入手写 Schema 和 Few-shot 示例。
-展示注入 Schema 和 Few-shot 示例后，LLM 生成 SQL 的准确性提升。
+在 v1 基础上增加 Chain-of-Thought 引导与结构化输出约束，
+用于观察附加步骤和约束对 SQL 生成的影响。
 
 运行方式：
-    uv run python text2sql_v1.py
+    uv run python -m examples.text2sql_v2
 """
 
 import os
@@ -17,7 +17,7 @@ import re
 from openai import OpenAI
 
 
-# ==================== 手写 Schema（完全靠人工整理）====================
+# ==================== Schema 与 Few-shot（同 v1）====================
 SCHEMA = """
 表：dim_customers（客户维度表）
 - customer_id INT 主键
@@ -71,7 +71,6 @@ SCHEMA = """
 """
 
 
-# ==================== Few-shot 示例 ====================
 FEW_SHOT_EXAMPLES = """
 示例1：
 问题：查询已完成订单的总数量
@@ -87,8 +86,32 @@ SQL：SELECT SUM(rd_expense + selling_expense + admin_expense + finance_expense)
 """
 
 
+# ==================== COT 引导与结构化约束 ====================
+COT_INSTRUCTION = """
+【思考步骤】
+在生成 SQL 之前，请按以下步骤思考：
+1. 识别问题中涉及的核心表和字段
+2. 判断是否需要 JOIN 以及 JOIN 的条件
+3. 确认金额口径（net_amount vs gross_amount）和成本口径
+4. 确认是否需要过滤 order_status = 'completed'
+5. 确认时间范围和汇率转换需求
+6. 最后生成 SQL
+"""
+
+OUTPUT_CONSTRAINTS = """
+【输出约束】
+1. 只输出 SQL 语句，不需要解释
+2. 使用标准 MySQL 语法
+3. 确保字段名和表名与 Schema 一致
+4. 如果涉及多表查询，使用 JOIN 连接
+5. 收入口径统一使用 net_amount，成本口径使用 material_cost + labor_cost
+6. 统计销售额时，需要按订单日期的汇率转换为人民币
+7. 所有收入类统计必须包含 WHERE order_status = 'completed'
+"""
+
+
 def build_prompt(user_question: str) -> str:
-    """构造包含 Schema 和 Few-shot 的 Prompt"""
+    """构造包含 COT 和结构化约束的 Prompt（ICIO 框架）"""
     prompt = f"""你是一个专业的 SQL 生成助手，擅长根据业务问题生成标准 MySQL 查询语句。
 
 【数据库Schema】
@@ -97,15 +120,12 @@ def build_prompt(user_question: str) -> str:
 【示例】
 {FEW_SHOT_EXAMPLES}
 
+{COT_INSTRUCTION}
+
+{OUTPUT_CONSTRAINTS}
+
 【用户问题】
 {user_question}
-
-【要求】
-1. 只输出 SQL 语句，不需要解释
-2. 使用标准 MySQL 语法
-3. 确保字段名和表名与 Schema 一致
-4. 如果涉及多表查询，使用 JOIN 连接
-5. 收入口径统一使用 net_amount，成本口径使用 material_cost + labor_cost
 
 请直接输出 SQL：
 """

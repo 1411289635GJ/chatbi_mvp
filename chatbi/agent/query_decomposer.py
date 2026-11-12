@@ -5,14 +5,14 @@ Query 拆解器模块
 """
 
 import json
-from pathlib import Path
 import re
 from typing import Callable
 
 from pydantic import BaseModel, Field, ValidationError
 
-from llm_client import LLMClient
-from prompt_builder import SCHEMA
+from chatbi.paths import PROJECT_ROOT
+from chatbi.core.llm_client import LLMClient
+from chatbi.core.prompt_builder import SCHEMA
 
 
 class DecomposedTask(BaseModel):
@@ -53,7 +53,7 @@ AVAILABLE_DIMENSIONS = [
 
 
 def _load_indicator_catalog() -> list[str]:
-    config_path = Path(__file__).with_name("indicators_full.json")
+    config_path = PROJECT_ROOT / "indicators_full.json"
     with config_path.open("r", encoding="utf-8") as file:
         data = json.load(file)
 

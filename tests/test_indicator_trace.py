@@ -46,17 +46,17 @@ def load_main_without_optional_dependencies():
         return module
 
     stubs = {
-        "config": fake_module("config", APP_CONFIG={"features": {}}, LLM_CONFIG={"model": "stub"}),
-        "database": fake_module("database", DatabaseClient=object, QueryExecutionError=FakeQueryExecutionError),
-        "indicator_knowledge": fake_module("indicator_knowledge", IndicatorKnowledge=object),
-        "llm_client": fake_module("llm_client", LLMClient=object),
-        "prompt_builder": fake_module("prompt_builder", build_prompt=lambda *a, **kw: ("system", "prompt")),
-        "query_parser": fake_module("query_parser", QueryParser=FakeParser),
-        "result_formatter": fake_module("result_formatter", ResultFormatter=object),
-        "runtime_factory": fake_module("runtime_factory", build_runtime=lambda *a, **kw: None),
-        "security": fake_module("security", SecurityError=FakeSecurityError, UserContext=FakeUserContext),
+        "chatbi.core.config": fake_module("chatbi.core.config", APP_CONFIG={"features": {}}, LLM_CONFIG={"model": "stub"}),
+        "chatbi.core.database": fake_module("chatbi.core.database", DatabaseClient=object, QueryExecutionError=FakeQueryExecutionError),
+        "chatbi.retrieval.indicator_knowledge": fake_module("chatbi.retrieval.indicator_knowledge", IndicatorKnowledge=object),
+        "chatbi.core.llm_client": fake_module("chatbi.core.llm_client", LLMClient=object),
+        "chatbi.core.prompt_builder": fake_module("chatbi.core.prompt_builder", build_prompt=lambda *a, **kw: ("system", "prompt")),
+        "chatbi.core.query_parser": fake_module("chatbi.core.query_parser", QueryParser=FakeParser),
+        "chatbi.core.result_formatter": fake_module("chatbi.core.result_formatter", ResultFormatter=object),
+        "chatbi.core.runtime_factory": fake_module("chatbi.core.runtime_factory", build_runtime=lambda *a, **kw: None),
+        "chatbi.core.security": fake_module("chatbi.core.security", SecurityError=FakeSecurityError, UserContext=FakeUserContext),
     }
-    path = Path(__file__).resolve().parents[1] / "main.py"
+    path = Path(__file__).resolve().parents[1] / "chatbi" / "main.py"
     spec = importlib.util.spec_from_file_location("chatbi_indicator_trace_under_test", path)
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, stubs):
@@ -68,7 +68,7 @@ MAIN = load_main_without_optional_dependencies()
 
 
 def rag_module(result=None, error=None):
-    module = types.ModuleType("indicator_retriever")
+    module = types.ModuleType("chatbi.retrieval.indicator_retriever")
     module.retrieve_indicator_context = Mock(side_effect=error, return_value=result)
     return module
 
@@ -124,7 +124,7 @@ class IndicatorTraceTests(unittest.TestCase):
     def test_rag_hit_takes_precedence(self):
         system, keyword = make_system({"detected_indicators": ["其他"], "indicator_block": "other"})
         rag = rag_module({"detected_indicators": ["收入"], "indicator_block": "rag content"})
-        with patch.dict(sys.modules, {"indicator_retriever": rag}):
+        with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}):
             detected, block, trace = system._resolve_indicator_context("问题", True, True, keyword)
         self.assertEqual((detected, block), (["收入"], "rag content"))
         self.assert_trace(trace, "rag", "matched")
@@ -137,7 +137,7 @@ class IndicatorTraceTests(unittest.TestCase):
                 system, keyword = make_system({"detected_indicators": ["收入"], "indicator_block": "keyword content"})
                 rag = (rag_module({"detected_indicators": [], "indicator_block": ""})
                        if rag_status == "empty" else rag_module(error=RuntimeError(secret)))
-                with patch.dict(sys.modules, {"indicator_retriever": rag}):
+                with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}):
                     detected, block, trace = system._resolve_indicator_context("问题", True, True, keyword)
                 self.assertEqual((detected, block), (["收入"], "keyword content"))
                 self.assert_trace(trace, "keyword", rag_status)
@@ -150,7 +150,7 @@ class IndicatorTraceTests(unittest.TestCase):
                 system, keyword = make_system()
                 rag = (rag_module({"detected_indicators": [], "indicator_block": ""})
                        if rag_status == "empty" else rag_module(error=RuntimeError("private detail")))
-                with patch.dict(sys.modules, {"indicator_retriever": rag}):
+                with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}):
                     detected, block, trace = system._resolve_indicator_context("问题", False, True, keyword)
                 self.assertEqual((detected, block), ([], ""))
                 self.assert_trace(trace, "none", rag_status)
@@ -159,7 +159,7 @@ class IndicatorTraceTests(unittest.TestCase):
     def test_rag_empty_and_keyword_empty_has_no_source(self):
         system, keyword = make_system()
         rag = rag_module({"detected_indicators": [], "indicator_block": ""})
-        with patch.dict(sys.modules, {"indicator_retriever": rag}):
+        with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}):
             detected, block, trace = system._resolve_indicator_context("问题", True, True, keyword)
         self.assertEqual((detected, block), ([], ""))
         self.assert_trace(trace, "none", "empty")
@@ -170,7 +170,7 @@ class IndicatorTraceTests(unittest.TestCase):
                 detected = ["收入"] if block else []
                 system, keyword = make_system({"detected_indicators": detected, "indicator_block": block})
                 rag = rag_module(error=AssertionError("RAG must not be called"))
-                with patch.dict(sys.modules, {"indicator_retriever": rag}):
+                with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}):
                     actual, knowledge, trace = system._resolve_indicator_context("问题", True, False, keyword)
                 self.assertEqual((actual, knowledge), (detected, block))
                 self.assert_trace(trace, source, "disabled")
@@ -179,7 +179,7 @@ class IndicatorTraceTests(unittest.TestCase):
     def test_both_disabled(self):
         system, keyword = make_system()
         rag = rag_module(error=AssertionError("RAG must not be called"))
-        with patch.dict(sys.modules, {"indicator_retriever": rag}):
+        with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}):
             detected, block, trace = system._resolve_indicator_context("问题", False, False, keyword)
         self.assertEqual((detected, block), ([], ""))
         self.assert_trace(trace, "none", "disabled")
@@ -205,7 +205,7 @@ class IndicatorTraceTests(unittest.TestCase):
                     )
                     rag = rag_module(error=RuntimeError(secret))
                     prompt_builder = Mock(return_value=("system", "prompt"))
-                    with patch.dict(sys.modules, {"indicator_retriever": rag}), patch.object(MAIN, "build_prompt", prompt_builder):
+                    with patch.dict(sys.modules, {"chatbi.retrieval.indicator_retriever": rag}), patch.object(MAIN, "build_prompt", prompt_builder):
                         if stream:
                             events = list(system.run_stream("问题", use_indicator_knowledge=True, use_indicator_rag=True))
                             event_type, data_line = events[-1].strip().split("\n", 1)
